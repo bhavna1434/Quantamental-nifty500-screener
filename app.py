@@ -382,7 +382,9 @@ with tab1:
 
                     def _safe(v, default=0):
                         try:
-                            return float(v) if v is not None else default
+                            f = float(v) if v is not None else None
+                            # f != f is True only for NaN (IEEE 754)
+                            return default if f is None or f != f else f
                         except (TypeError, ValueError):
                             return default
 
