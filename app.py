@@ -144,6 +144,22 @@ with st.sidebar:
     else:
         st.caption("First run scrapes all 500 stocks (~15 min). Subsequent runs use cache.")
 
+    st.divider()
+    st.subheader("Methodology")
+    from src.methodology_pdf import generate_methodology_pdf
+    import os as _os
+    _pdf_path = "data/Nifty500_Methodology.pdf"
+    if not _os.path.exists(_pdf_path):
+        generate_methodology_pdf(_pdf_path)
+    with open(_pdf_path, "rb") as _f:
+        st.download_button(
+            label="Download Methodology PDF",
+            data=_f,
+            file_name="Nifty500_Methodology.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
 
 # ── Regime (computed once per page load, stored so pipeline can use it) ──────
 try:
