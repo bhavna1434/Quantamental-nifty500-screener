@@ -28,6 +28,7 @@ from src.visualizations import (
     plot_factor_radar,
     plot_rank_history,
 )
+from src.backtesting import run_momentum_backtest, plot_backtest_results
 
 init_database()
 
@@ -295,11 +296,12 @@ st.plotly_chart(
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🏆 Ranked Stocks",
     "📊 Factor Analysis",
     "📅 History & Changes",
     "🔎 Stock Deep-Dive",
+    "⏱ Backtest",
 ])
 
 
@@ -490,6 +492,101 @@ with tab4:
                 st.plotly_chart(plot_rank_history(_tick, _hist), use_container_width=True)
             else:
                 st.info(f"No history yet for {_tick}. Run the screener to record it.")
+
+
+# ── TAB 5: Backtest ──────────────────────────────────────────────────────────
+with tab5:
+    st.subheader("Momentum Strategy Backtest")
+    st.caption(
+        "Simulates running a price-momentum screener monthly on the Nifty 500 universe, "
+        "holding the top N stocks for one month, then rebalancing. "
+        "Transaction costs of 0.5% per rebalance are included."
+    )
+
+    with st.expander("⚠️ Important Limitations — Read Before Interpreting Results", expanded=False):
+        st.warning(
+            "**Survivorship bias:** This backtest uses the *current* Nifty 500 constituent list. "
+            "Stocks that were delisted, merged, or dropped from the index between 2019–2024 are "
+            "excluded, which artificially inflates returns. Real-world results would be lower.\n\n"
+            "**Price-momentum only:** The live screener uses 5 factors (value, growth, quality, "
+            "momentum, earnings surprise). This backtest uses price momentum only — historical "
+            "fundamental data requires a paid source (Trendlyne Pro, Bloomberg).\n\n"
+            "**No look-ahead bias on momentum:** The momentum signal uses only prices available "
+            "at each rebalancing date. The most recent month is excluded to avoid the short-term "
+            "reversal effect.\n\n"
+            "**For educational purposes only.** Past simulated performance is not a reliable "
+            "indicator of future returns."
+        )
+
+    bt_col1, bt_col2, bt_col3 = st.columns(3)
+    with bt_col1:
+        bt_universe_n = st.slider("Universe size (top N Nifty 500 stocks)", 50, 500, 100, step=50)
+    with bt_col2:
+        bt_top_n = st.slider("Portfolio size (top N per rebalance)", 10, 50, 20, step=5)
+    with bt_col3:
+        bt_momentum_months = st.slider("Momentum lookback (months)", 3, 12, 6)
+
+    run_bt = st.button("Run Backtest", type="primary", key="run_backtest_btn")
+
+    if run_bt:
+        with st.spinner(f"Downloading 5y prices for {bt_universe_n} stocks and running backtest…"):
+            try:
+                _bt_tickers = load_nifty500_list()[:bt_universe_n]
+                _bt_nse = [t + ".NS" for t in _bt_tickers]
+                _bt_prices = yf.download(
+                    _bt_nse, period="5y", progress=False, auto_adjust=True
+                )["Close"]
+                _bt_prices.columns = [c.replace(".NS", "") for c in _bt_prices.columns]
+                _bt_prices.index = pd.to_datetime(_bt_prices.index).tz_localize(None)
+
+                _bt_nifty = yf.download(
+                    "^CRSLDX", period="5y", progress=False, auto_adjust=True
+                )["Close"].squeeze()
+                _bt_nifty.index = pd.to_datetime(_bt_nifty.index).tz_localize(None)
+
+                _bt_results = run_momentum_backtest(
+                    price_df=_bt_prices,
+                    nifty_prices=_bt_nifty,
+                    top_n=bt_top_n,
+                    momentum_months=bt_momentum_months,
+                    start_date="2019-01-01",
+                    end_date="2024-12-31",
+                )
+                st.session_state["backtest_results"] = _bt_results
+            except Exception as _e:
+                st.error(f"Backtest failed: {_e}")
+
+    if "backtest_results" in st.session_state:
+        _res = st.session_state["backtest_results"]
+
+        if "error" in _res:
+            st.error(_res["error"])
+        else:
+            # ── Metrics table ─────────────────────────────────────────────────
+            st.subheader("Performance Metrics")
+            _metrics = _res["metrics"]
+            _rows = []
+            for k, v in _metrics.items():
+                if v == "":
+                    _rows.append({"Metric": f"**{k}**", "Value": ""})
+                else:
+                    _rows.append({"Metric": k, "Value": v})
+            st.table(pd.DataFrame(_rows).set_index("Metric"))
+
+            st.divider()
+
+            # ── Cumulative return chart ───────────────────────────────────────
+            st.subheader("Cumulative Returns vs Nifty 500")
+            st.plotly_chart(plot_backtest_results(_res), use_container_width=True)
+
+            # ── Monthly holdings history ──────────────────────────────────────
+            with st.expander("Monthly Portfolio Holdings (last 12 months)"):
+                _hist = _res.get("portfolio_history", [])
+                if _hist:
+                    for _entry in _hist[-12:]:
+                        st.write(f"**{_entry['date']}** — {', '.join(_entry['holdings'])}")
+    else:
+        st.info("Configure the parameters above and click **Run Backtest** to see results.")
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────

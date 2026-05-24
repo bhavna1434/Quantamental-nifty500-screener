@@ -169,7 +169,7 @@ def run_momentum_backtest(
     nifty_prices: pd.Series,
     top_n: int = 20,
     momentum_months: int = 6,
-    rebalance_freq: str = "M",   # M = end of each month
+    rebalance_freq: str = "ME",  # ME = month-end (pandas >= 2.2; was "M")
     start_date: str = "2019-01-01",
     end_date: str = "2024-12-31",
     transaction_cost_pct: float = 0.005,  # 0.5% round-trip per rebalance
