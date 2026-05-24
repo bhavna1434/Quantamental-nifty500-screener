@@ -1,7 +1,5 @@
 # Quantamental Nifty 500 Screener — Project Roadmap (v2)
-**Goal:** Build and deploy a 5-stage QVGS-style stock screener on GitHub + Streamlit Cloud by July 2026  
-**Time budget:** 5–8 hours/week | **Experience level:** Python beginner (loops, functions)  
-**Target:** Modulor Capital internship — replicate their Red/Yellow/Green-Flag framework for Nifty 500
+**Goal:** Build and deploy a 5-stage QVGS-style stock screener on GitHub + Streamlit Cloud 
 
 ---
 
