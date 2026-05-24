@@ -36,6 +36,13 @@ from src.backtesting import run_momentum_backtest, plot_backtest_results
 init_database()
 import_history_from_csv()   # re-seed SQLite from CSV after cloud restarts
 
+# Evict any ranked_df cached under the old column schema (pre-eps_momentum rename)
+if "ranked_df" in st.session_state:
+    _cached = st.session_state["ranked_df"]
+    if _cached is not None and "surprise_score" in _cached.columns:
+        del st.session_state["ranked_df"]
+        del st.session_state["excluded_df"]
+
 CACHE_PATH   = Path("data/fundamentals_cache.csv")
 CACHE_MAX_AGE_DAYS = 7
 
@@ -321,6 +328,11 @@ with tab1:
     if ranked_df is None or ranked_df.empty:
         st.info("Click **▶ Run Screener** in the sidebar to load real data.")
     else:
+        # Forward-compat: rename old column if loaded from a pre-rename cache
+        if "surprise_score" in ranked_df.columns:
+            ranked_df = ranked_df.rename(columns={"surprise_score": "eps_momentum_score"})
+            st.session_state["ranked_df"] = ranked_df
+
         # Only show stocks that passed the Stage 4 technical filter
         if "passes" in ranked_df.columns:
             display_df_full = ranked_df[ranked_df["passes"] == True].copy()
