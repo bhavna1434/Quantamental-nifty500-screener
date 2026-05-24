@@ -22,6 +22,7 @@
 import time
 import requests
 import pandas as pd
+import yfinance as yf
 from bs4 import BeautifulSoup
 from src.financial_health import passes_health_gate
 
@@ -35,6 +36,10 @@ HEADERS = {
 }
 REQUEST_DELAY = 1.5    # seconds between requests — be polite to Screener.in
 REQUEST_TIMEOUT = 15   # seconds
+
+# ── New gate thresholds ───────────────────────────────────────────────────────
+MARKET_CAP_MIN_CRORE  = 500.0   # reject stocks below Rs.500 Cr market cap
+LIQUIDITY_MIN_CRORE   = 5.0     # reject if avg daily traded value < Rs.5 Cr
 
 # ── Sector-adjusted thresholds ────────────────────────────────────────────────
 # See 03_LIMITATIONS_AND_CALIBRATION.md Section 4.1 for full rationale.
@@ -385,13 +390,15 @@ def apply_red_flag_filter(
     Apply all Stage 2 Red-Flag filters to the full Nifty 500 universe.
 
     Filters applied (in order):
-      1. Data availability check (skip if can't fetch data)
-      2. ROCE ≥ sector floor
-      3. Debt/Equity ≤ sector ceiling
-      4. Interest Coverage ≥ 1.5x
-      5. Promoter Pledge ≤ 20%
-      6. Piotroski F-Score ≥ 5
-      7. Altman Z'' not in Distress zone
+      0a. Market cap ≥ Rs.500 Cr
+      0b. Avg daily traded value ≥ Rs.5 Cr (3-month window via yfinance)
+      1.  Data availability check (skip if can't fetch data)
+      2.  ROCE ≥ sector floor
+      3.  Debt/Equity ≤ sector ceiling
+      4.  Interest Coverage ≥ 1.5x
+      5.  Promoter Pledge ≤ 20%
+      6.  Piotroski F-Score ≥ 5
+      7.  Altman Z'' not in Distress zone
 
     Args:
         universe:   List of NSE ticker symbols (Nifty 500 constituent list)
@@ -409,6 +416,34 @@ def apply_red_flag_filter(
     rejected_log = []
     fundamentals_store = []   # cache for use in factor model
 
+    # ── Pre-compute liquidity: avg daily value traded over last 3 months ──────
+    # Batch yfinance download is fast (~10s for 500 tickers).
+    liquidity_map = {}
+    try:
+        if verbose:
+            print("Downloading 3-month volume data for liquidity check…")
+        tickers_ns = [t + ".NS" for t in universe]
+        raw_3m = yf.download(tickers_ns, period="3mo", progress=False, auto_adjust=True)
+        _close  = raw_3m["Close"].copy()
+        _volume = raw_3m["Volume"].copy()
+        _close.columns  = [c.replace(".NS", "") for c in _close.columns]
+        _volume.columns = [c.replace(".NS", "") for c in _volume.columns]
+        for _t in universe:
+            if _t in _close.columns and _t in _volume.columns:
+                _c = _close[_t].dropna()
+                _v = _volume[_t].dropna()
+                _aligned = pd.concat([_c, _v], axis=1, join="inner")
+                _aligned.columns = ["close", "volume"]
+                _avg_crore = (_aligned["close"] * _aligned["volume"]).mean() / 1e7
+                liquidity_map[_t] = round(float(_avg_crore), 2)
+            else:
+                liquidity_map[_t] = None
+        if verbose:
+            print(f"Liquidity computed for {sum(v is not None for v in liquidity_map.values())} stocks.\n")
+    except Exception as _e:
+        if verbose:
+            print(f"Warning: liquidity download failed ({_e}). Skipping liquidity gate.\n")
+
     total = len(universe)
     for i, ticker in enumerate(universe, 1):
         if verbose:
@@ -425,6 +460,27 @@ def apply_red_flag_filter(
                 print("SKIP — data unavailable")
             rejected_log.append({"ticker": ticker, "reason": "data_unavailable"})
             continue
+
+        # ── Gate 0a: Market Cap ───────────────────────────────────────────────
+        mcap = data.get("market_cap")
+        if mcap is None or mcap < MARKET_CAP_MIN_CRORE:
+            _mcap_str = f"Rs.{mcap:.0f}Cr" if mcap is not None else "unavailable"
+            if verbose:
+                print(f"FAIL — Market cap {_mcap_str} below Rs.{MARKET_CAP_MIN_CRORE:.0f}Cr minimum")
+            rejected_log.append({"ticker": ticker,
+                                  "reason": f"market_cap_{_mcap_str}_below_500Cr"})
+            continue
+
+        # ── Gate 0b: Liquidity ────────────────────────────────────────────────
+        if liquidity_map:   # skip gate if volume download failed
+            liq = liquidity_map.get(ticker)
+            if liq is None or liq < LIQUIDITY_MIN_CRORE:
+                _liq_str = f"Rs.{liq:.1f}Cr" if liq is not None else "no data"
+                if verbose:
+                    print(f"FAIL — Avg daily value {_liq_str} below Rs.{LIQUIDITY_MIN_CRORE:.0f}Cr minimum")
+                rejected_log.append({"ticker": ticker,
+                                     "reason": f"avg_daily_value_{_liq_str}_below_5Cr"})
+                continue
 
         # ── Gate 1: ROCE ──────────────────────────────────────────────────────
         roce_floor = SECTOR_ROCE_FLOORS.get(sector, SECTOR_ROCE_FLOORS["Default"])
