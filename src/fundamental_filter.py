@@ -41,6 +41,22 @@ REQUEST_TIMEOUT = 15   # seconds
 MARKET_CAP_MIN_CRORE  = 500.0   # reject stocks below Rs.500 Cr market cap
 LIQUIDITY_MIN_CRORE   = 5.0     # reject if avg daily traded value < Rs.5 Cr
 
+# ── Screener.in URL slug overrides ───────────────────────────────────────────
+# Some NSE tickers don't match the Screener.in URL slug directly.
+# Verified by probing the Screener.in search API and confirming 200 responses.
+# Values are the exact path segment used in screener.in/company/<slug>/
+TICKER_URL_MAP = {
+    # Tata Motors restructured: NSE uses TATAMOTORS, Screener.in uses TMCV
+    "TATAMOTORS":  "TMCV",
+    # L&T Finance was L&TFH on NSE; renamed and relisteed as LTF
+    "L&TFH":       "LTF",
+    # LTIMindtree has no slug-based page; only accessible via BSE code 540005
+    "LTIM":        "540005",
+    # Tickers that contain special chars — map to their working Screener.in form
+    "M&MFIN":      "M&MFIN",   # works as-is but explicit for safety
+    "AT&T":        "AT-T",     # hypothetical; shows the & → - pattern
+}
+
 # ── Sector-adjusted thresholds ────────────────────────────────────────────────
 # See 03_LIMITATIONS_AND_CALIBRATION.md Section 4.1 for full rationale.
 # Capital-intensive sectors (infra, utilities) legitimately carry more debt
@@ -105,13 +121,25 @@ def fetch_fundamentals(ticker: str) -> dict | None:
     Returns:
         dict of fundamental data, or None if the fetch/parse fails
     """
-    url = f"https://www.screener.in/company/{ticker.upper()}/"
+    # Resolve the Screener.in URL slug: some NSE tickers don't match directly
+    slug = TICKER_URL_MAP.get(ticker.upper(), ticker.upper())
+    url = f"https://www.screener.in/company/{slug}/"
 
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+
         if resp.status_code == 404:
-            print(f"  {ticker}: Not found on Screener.in (404). Skipping.")
+            # Retry 1: try /consolidated/ view (some companies only have this)
+            consolidated_url = f"https://www.screener.in/company/{slug}/consolidated/"
+            try:
+                resp = requests.get(consolidated_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            except requests.RequestException:
+                pass
+
+        if resp.status_code == 404:
+            print(f"  {ticker}: Not found on Screener.in (tried {slug} and {slug}/consolidated/). Skipping.")
             return None
+
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"  {ticker}: Request failed — {e}")
