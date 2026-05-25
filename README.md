@@ -80,7 +80,7 @@ Stage 5 · Streamlit Dashboard
 ## How to Run Locally
 
 ```bash
-git clone https://github.com/bhavna1434/nifty500-screener
+git clone https://github.com/bhavna1434/Quantamental-nifty500-screener
 cd nifty500-screener
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -102,6 +102,6 @@ streamlit run app.py
 
 ## Built By
 
-Bhavna Sharma · bhavnasharma.1404@gmail.com · [GitHub](https://github.com/bhavna1434)
+Bhavna Sharma · bhavnasharma.1404@gmail.com · [GitHub](https://github.com/bhavna1434/Quantamental-nifty500-screener)
 
 Built as a quantitative finance portfolio project, May-June 2026.
