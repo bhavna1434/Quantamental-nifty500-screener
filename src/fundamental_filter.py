@@ -206,8 +206,6 @@ def fetch_fundamentals(ticker: str) -> dict | None:
                 pass  # skip
             elif any(x in label for x in ("debt / equity", "debt to equity", "d/e ratio", "d/e")):
                 data["debt_equity"] = val
-            elif "interest coverage" in label or "int. coverage" in label:
-                data["interest_coverage"] = val
             elif "ev/ebitda" in label:
                 data["ev_ebitda"] = val
 
@@ -282,6 +280,15 @@ def fetch_fundamentals(ticker: str) -> dict | None:
             depreciation = (pl_data.get("Depreciation") or [None])[-1]
             if op_profit is not None and depreciation is not None:
                 data["ebit"] = op_profit - depreciation
+
+            # Interest Coverage Ratio = EBIT / Interest expense.
+            # Screener.in does not expose ICR directly; compute it from the
+            # P&L "Interest" row (which IS in the static HTML table).
+            interest_expense = (pl_data.get("Interest") or [None])[-1]
+            if interest_expense is not None and interest_expense > 0:
+                ebit_for_icr = data.get("ebit")
+                if ebit_for_icr is not None:
+                    data["interest_coverage"] = round(ebit_for_icr / interest_expense, 2)
 
             # Shares outstanding proxy: Net Profit / EPS (for Piotroski B7 dilution check)
             eps_vals = pl_data.get("EPS in Rs", [])
