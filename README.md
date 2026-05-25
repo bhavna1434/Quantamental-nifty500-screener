@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Cloud-red)
 ![License](https://img.shields.io/badge/License-MIT-green)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-ff4b4b?logo=streamlit)](https://bhavna-nifty500-screener.streamlit.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-ff4b4b?logo=streamlit)](https://bhavna1434-quantamental-nifty500-screener.streamlit.app)
 
 ---
 
@@ -81,7 +81,7 @@ Stage 5 · Streamlit Dashboard
 
 ```bash
 git clone https://github.com/bhavna1434/Quantamental-nifty500-screener
-cd nifty500-screener
+cd Quantamental-nifty500-screener
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run app.py

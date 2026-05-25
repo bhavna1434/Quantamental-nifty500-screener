@@ -780,6 +780,6 @@ with tab5:
 st.divider()
 st.caption(
     "Built by Bhavna Sharma · "
-    "[GitHub](https://github.com/bhavna1434/nifty500-screener) · "
+    "[GitHub](https://github.com/bhavna1434/Quantamental-nifty500-screener) · "
     "Data: Yahoo Finance + Screener.in · For educational purposes only."
 )
