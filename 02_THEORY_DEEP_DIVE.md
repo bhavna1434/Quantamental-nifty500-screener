@@ -1,5 +1,4 @@
 # Theory Deep-Dive: Every Concept Behind the Screener
-**Read this before every interview. Every formula here should feel like your own handwriting.**
 
 ---
 
