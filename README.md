@@ -7,6 +7,10 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-ff4b4b?logo=streamlit)](https://bhavna1434-quantamental-nifty500-screener.streamlit.app)
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Quantamental Nifty 500 Screener dashboard" width="820">
+</p>
+
 ---
 
 ## What This Is
@@ -60,13 +64,13 @@ Stage 5 · Streamlit Dashboard
 
 ## Academic Foundation
 
-| Paper | Factor | Key Finding |
-|---|---|---|
-| Piotroski (2000) | Quality | 9-point F-Score separates improving from deteriorating value stocks; long-short earns ~23% annually |
-| Altman (1968, 1995) | Quality | Z-Score and Z''-Score predict bankruptcy 1–2 years ahead with >80% accuracy |
-| Jegadeesh & Titman (1993) | Momentum | Stocks with strong 3–12M returns continue to outperform for the next 3–12M |
-| Fama & French (1992) | Value / Size | Book-to-market ratio and market cap explain cross-sectional return variation beyond beta |
-| Ball & Brown (1968) | EPS Momentum | Earnings surprises drive post-announcement price drift (PEAD) for 30–60 days |
+| Paper | Role in Model | Key Finding |
+| --- | --- | --- |
+| Piotroski (2000) | Red-Flag gate — financial health | 9-point F-Score separates improving from deteriorating value stocks; long-short earns ~23% annually |
+| Altman (1968, 1995) | Red-Flag gate — solvency | Z-Score and Z''-Score predict corporate bankruptcy 1–2 years in advance |
+| Jegadeesh & Titman (1993) | Momentum factor | Stocks with strong 3–12M returns continue to outperform over the next 3–12M |
+| Fama & French (1992) | Value factor | Book-to-market ratio explains cross-sectional returns beyond market beta (size factor documented but not implemented here) |
+| Ball & Brown (1968) | EPS Momentum factor | Earnings surprises drive post-announcement price drift (PEAD) for 30–60 days |
 
 ---
 
@@ -100,8 +104,16 @@ streamlit run app.py
 
 ---
 
+## Documentation
+
+- [Project Roadmap](00_PROJECT_ROADMAP.md) — build plan and full feature set
+- [Theory & Methodology](02_THEORY_DEEP_DIVE.md) — the financial theory, formulas, and academic basis for each stage
+- [Limitations & Calibration](03_LIMITATIONS_AND_CALIBRATION.md) — known limitations, biases, and India-specific calibration notes
+
+---
+
 ## Built By
 
 Bhavna Sharma · bhavnasharma.1404@gmail.com · [GitHub](https://github.com/bhavna1434/Quantamental-nifty500-screener)
 
-Built as a quantitative finance portfolio project, May-June 2026.
+Built as a quantitative finance portfolio project, May–July 2026.
