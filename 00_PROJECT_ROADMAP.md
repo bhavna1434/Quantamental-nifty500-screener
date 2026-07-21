@@ -27,8 +27,10 @@ Nifty 500 Universe
 | Feature | What it does | Difficulty |
 |---------|-------------|-----------|
 | ROCE / Debt / Pledge | Original hard filters | Easy |
-| **Piotroski F-Score** | 9-point financial health score — stocks below 4 are rejected | Medium |
-| **Altman Z-Score** | Bankruptcy risk model — Z < 1.81 is distress zone, rejected | Medium |
+| **Piotroski F-Score** | 9-point financial health score — Piotroski F-Score >= 5 required | Medium |
+| **Altman Z''-Score** | Bankruptcy risk model (1995 emerging markets model), threshold >= 1.10 | Medium |
+| **ICR** | ICR >= 1.5x (Interest Coverage Ratio, computed as EBIT/Interest from P&L) | Medium |
+| **Market Cap / Liquidity** | Market cap >= 500 Cr and liquidity >= Rs 5 Cr/day | Easy |
 
 ### Stage 3 — Factor Model (upgraded)
 | Factor | Signal | Weight |
@@ -37,7 +39,7 @@ Nifty 500 Universe
 | Growth | Revenue CAGR + EPS CAGR | 20% |
 | Quality | ROE + ROCE | 20% |
 | Momentum | 6-month price return | 20% |
-| **Earnings Surprise (PEAD)** | EPS actual vs consensus — post-announcement drift | 20% |
+| **EPS Momentum (QoQ EPS % change)** | EPS actual vs consensus — post-announcement drift | 20% |
 
 ### Stage 5 — Dashboard (upgraded)
 | Feature | What it adds |
@@ -173,12 +175,12 @@ nifty500-screener/
 
 ## Milestones & Checkpoints
 
-- [ ] **May 8** — Price data loading for all 500 stocks
-- [ ] **May 22** — Stage 2 complete: Piotroski + Altman + basic filters running
-- [ ] **June 5** — Stage 3 complete: 5-factor model ranking top 50
-- [ ] **June 12** — Stage 4 complete: technical filter + correlation matrix
-- [ ] **June 26** — Full Streamlit app running locally (all features)
-- [ ] **July 4** — 🚀 Live on Streamlit Cloud + GitHub
+- [x] **May 8** — Price data loading for all 500 stocks
+- [x] **May 22** — Stage 2 complete: Piotroski + Altman + basic filters running
+- [x] **June 5** — Stage 3 complete: 5-factor model ranking top 50
+- [x] **June 12** — Stage 4 complete: technical filter + correlation matrix
+- [x] **June 26** — Full Streamlit app running locally (all features)
+- [x] **July 4** — 🚀 Live on Streamlit Cloud + GitHub
 
 ---
 
@@ -186,7 +188,7 @@ nifty500-screener/
 
 1. **Piotroski F-Score** — institutional-grade financial health filter, not just ROCE
 2. **Altman Z-Score** — bankruptcy risk model every finance professional recognizes
-3. **PEAD factor** — directly replicates their sentiment/earnings-surprise strategy
+3. **EPS Momentum factor** — directly replicates their sentiment/earnings-surprise strategy
 4. **Factor weight sliders** — interactive, demonstrates product thinking
 5. **Screener history** — shows systematic discipline, not a one-time script
 6. **PDF tearsheet** — makes it look like a real investment product
