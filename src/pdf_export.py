@@ -26,6 +26,40 @@ COLOR_AMBER   = (186, 117, 23)    # Neutral / warning
 COLOR_RED     = (216, 90, 48)     # Danger / negative
 COLOR_BLUE    = (55, 138, 221)    # Accent / headers
 COLOR_BG_LIGHT = (248, 249, 250)  # Light section backgrounds
+COLOR_NA       = (150, 150, 150)  # Missing / N/A
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MISSING-VALUE HANDLING — a value must be explicitly present and numeric to be
+# rendered; anything else (None, NaN, unparseable strings) renders as "N/A".
+# Never silently fall back to 0 — a 0 looks like a real, wrong measurement.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _num(v):
+    """Parse to float; return None if missing, NaN, or unparseable."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
+
+
+def _txt(v, default="N/A"):
+    """Return v as text unless missing/NaN, then default."""
+    if v is None:
+        return default
+    if isinstance(v, float) and v != v:
+        return default
+    s = str(v).strip()
+    return default if s == "" or s.lower() in ("nan", "none") else s
+
+
+def _fmt(v, spec: str, na: str = "N/A") -> str:
+    """Format a numeric value, or return na if it's missing."""
+    n = _num(v)
+    return na if n is None else format(n, spec)
 
 
 def _color_for_piotroski(score: int) -> tuple:
@@ -116,8 +150,8 @@ def generate_tearsheet(stock_data: dict) -> bytes:
     pdf.set_xy(10, 26)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*COLOR_MUTED)
-    company = stock_data.get("company_name", "")
-    sector  = stock_data.get("sector", "")
+    company = _txt(stock_data.get("company_name"), default="")
+    sector  = _txt(stock_data.get("sector"), default="")
     pdf.cell(0, 6, f"{company}  |  {sector}", ln=1)
 
     # Rank badge
@@ -144,26 +178,31 @@ def generate_tearsheet(stock_data: dict) -> bytes:
     # ── COMPOSITE SCORE + FINANCIAL HEALTH ───────────────────────────────────
     _section_header(pdf, "Composite Score & Financial Health", y=45)
 
-    composite = stock_data.get("composite_score", 0)
-    piotroski  = stock_data.get("piotroski_score", 0)
-    altman_z   = stock_data.get("altman_zscore", 0)
-    altman_zone = stock_data.get("altman_zone", "-")
+    composite   = _num(stock_data.get("composite_score"))
+    piotroski   = _num(stock_data.get("piotroski_score"))
+    altman_z    = _num(stock_data.get("altman_zscore"))
+    altman_zone = _txt(stock_data.get("altman_zone"))
 
-    _metric_box(pdf, x=10,  y=53, w=58, label="Composite Score", value=f"{composite:.2f}", color=COLOR_BLUE)
+    _metric_box(pdf, x=10,  y=53, w=58, label="Composite Score",
+                value="N/A" if composite is None else f"{composite:.2f}",
+                color=COLOR_NA if composite is None else COLOR_BLUE)
     _metric_box(pdf, x=72,  y=53, w=58, label="Piotroski F-Score",
-                value=f"{piotroski}/9", color=_color_for_piotroski(piotroski))
+                value="N/A" if piotroski is None else f"{int(piotroski)}/9",
+                color=COLOR_NA if piotroski is None else _color_for_piotroski(int(piotroski)))
     _metric_box(pdf, x=134, y=53, w=58, label="Altman Z-Score",
-                value=f"{altman_z:.1f} ({altman_zone})", color=_color_for_altman(altman_zone))
+                value="N/A" if (altman_z is None or altman_zone == "N/A")
+                      else f"{altman_z:.1f} ({altman_zone})",
+                color=COLOR_NA if altman_z is None else _color_for_altman(altman_zone))
 
     # ── FACTOR SCORES ─────────────────────────────────────────────────────────
     _section_header(pdf, "Factor Scores (Z-Score vs Nifty 500 Universe)", y=72)
 
     factors = [
-        ("Value",            stock_data.get("value_score", 0)),
-        ("Growth",           stock_data.get("growth_score", 0)),
-        ("Quality",          stock_data.get("quality_score", 0)),
-        ("Momentum",         stock_data.get("momentum_score", 0)),
-        ("Earnings Surprise",stock_data.get("surprise_score", 0)),
+        ("Value",            _num(stock_data.get("value_score"))),
+        ("Growth",           _num(stock_data.get("growth_score"))),
+        ("Quality",          _num(stock_data.get("quality_score"))),
+        ("Momentum",         _num(stock_data.get("momentum_score"))),
+        ("Earnings Surprise",_num(stock_data.get("surprise_score"))),
     ]
 
     x_start = 10
@@ -176,13 +215,19 @@ def generate_tearsheet(stock_data: dict) -> bytes:
     # ── FUNDAMENTAL SNAPSHOT ─────────────────────────────────────────────────
     _section_header(pdf, "Fundamental Snapshot", y=110)
 
+    def _fmt_suffixed(v, spec: str, suffix: str) -> str:
+        n = _num(v)
+        return "N/A" if n is None else f"{format(n, spec)}{suffix}"
+
+    _cp = _num(stock_data.get("current_price"))
+
     fundamentals = [
-        ("Current Price",   f"Rs.{stock_data.get('current_price', 0):,.0f}"),
-        ("P/E Ratio",       f"{stock_data.get('pe_ratio', 0):.1f}x"),
-        ("ROCE",            f"{stock_data.get('roce', 0):.1f}%"),
-        ("Debt / Equity",   f"{stock_data.get('debt_equity', 0):.2f}x"),
-        ("Revenue CAGR 3Y", f"{stock_data.get('revenue_cagr_3y', 0):+.1f}%"),
-        ("EPS CAGR 3Y",     f"{stock_data.get('eps_cagr_3y', 0):+.1f}%"),
+        ("Current Price",   "N/A" if _cp is None else f"Rs.{_cp:,.0f}"),
+        ("P/E Ratio",       _fmt_suffixed(stock_data.get("pe_ratio"), ".1f", "x")),
+        ("ROCE",            _fmt_suffixed(stock_data.get("roce"), ".1f", "%")),
+        ("Debt / Equity",   _fmt_suffixed(stock_data.get("debt_equity"), ".2f", "x")),
+        ("Revenue CAGR 3Y", _fmt_suffixed(stock_data.get("revenue_cagr_3y"), "+.1f", "%")),
+        ("EPS CAGR 3Y",     _fmt_suffixed(stock_data.get("eps_cagr_3y"), "+.1f", "%")),
     ]
 
     _two_column_table(pdf, fundamentals, y=118)
@@ -190,16 +235,20 @@ def generate_tearsheet(stock_data: dict) -> bytes:
     # ── TECHNICAL SIGNALS ────────────────────────────────────────────────────
     _section_header(pdf, "Technical Entry Signals (Green-Flag Check)", y=148)
 
-    rsi = stock_data.get("rsi", 0)
-    ma50 = stock_data.get("ma_50", 0)
-    price = stock_data.get("current_price", 0)
-    pct_52w = stock_data.get("pct_from_52w_high", 0)
+    rsi     = _num(stock_data.get("rsi"))
+    ma50    = _num(stock_data.get("ma_50"))
+    price   = _num(stock_data.get("current_price"))
+    pct_52w = _num(stock_data.get("pct_from_52w_high"))
 
     tech_checks = [
-        ("RSI (14-day)",         f"{rsi:.1f}",  rsi <= 70),
-        ("Price vs 50-day MA",   f"{'Above' if price >= ma50 else 'Below'} (MA: Rs.{ma50:,.0f})",
-                                  price >= ma50),
-        ("From 52-week High",    f"{pct_52w:.1f}% below",  pct_52w <= 20),
+        ("RSI (14-day)", "N/A" if rsi is None else f"{rsi:.1f}",
+         None if rsi is None else rsi <= 70),
+        ("Price vs 50-day MA",
+         "N/A" if price is None or ma50 is None
+         else f"{'Above' if price >= ma50 else 'Below'} (MA: Rs.{ma50:,.0f})",
+         None if price is None or ma50 is None else price >= ma50),
+        ("From 52-week High", "N/A" if pct_52w is None else f"{pct_52w:.1f}% below",
+         None if pct_52w is None else pct_52w <= 20),
     ]
 
     _checklist_table(pdf, tech_checks, y=156)
@@ -245,7 +294,8 @@ def _metric_box(pdf, x: float, y: float, w: float, label: str, value: str, color
 
 
 def _factor_bar(pdf, x: float, y: float, w: float, label: str, score: float):
-    """Draws a single factor score with a mini progress bar."""
+    """Draws a single factor score with a mini progress bar.
+    score of None (missing data) renders "N/A" with an empty bar."""
     # Label
     pdf.set_xy(x, y)
     pdf.set_font("Helvetica", "", 7)
@@ -255,9 +305,9 @@ def _factor_bar(pdf, x: float, y: float, w: float, label: str, score: float):
     # Score value
     pdf.set_xy(x, y + 4)
     pdf.set_font("Helvetica", "B", 12)
-    color = _color_for_zscore(score)
+    color = COLOR_NA if score is None else _color_for_zscore(score)
     pdf.set_text_color(*color)
-    pdf.cell(w, 7, f"{score:+.2f}", align="C", ln=1)
+    pdf.cell(w, 7, "N/A" if score is None else f"{score:+.2f}", align="C", ln=1)
 
     # Mini bar: normalize score from [-3, 3] to [0, w]
     bar_full_w = w - 4
@@ -265,6 +315,11 @@ def _factor_bar(pdf, x: float, y: float, w: float, label: str, score: float):
     bar_y = y + 13
     pdf.set_fill_color(*COLOR_BORDER)
     pdf.rect(bar_x, bar_y, bar_full_w, 3, "F")
+
+    if score is None:
+        pdf.set_draw_color(*COLOR_DARK)
+        pdf.line(bar_x + bar_full_w/2, bar_y, bar_x + bar_full_w/2, bar_y + 3)
+        return
 
     # Fill portion
     clipped = max(-3, min(3, score))
@@ -307,13 +362,14 @@ def _two_column_table(pdf, rows: list, y: float):
 
 
 def _checklist_table(pdf, checks: list, y: float):
-    """Renders a checklist table with pass/fail indicators."""
+    """Renders a checklist table with pass/fail indicators.
+    passes of None (missing data) renders a neutral N/A row."""
     for i, (label, value, passes) in enumerate(checks):
         ry = y + i * 8
         pdf.set_xy(10, ry)
 
         # Pass/Fail indicator
-        icon_color = COLOR_GREEN if passes else COLOR_RED
+        icon_color = COLOR_NA if passes is None else (COLOR_GREEN if passes else COLOR_RED)
         pdf.set_fill_color(*icon_color)
         pdf.rect(10, ry + 1, 4, 4, "F")
 
@@ -326,7 +382,8 @@ def _checklist_table(pdf, checks: list, y: float):
         pdf.cell(60, 6, value)
         pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(*icon_color)
-        pdf.cell(30, 6, "PASS" if passes else "FAIL")
+        status = "N/A" if passes is None else ("PASS" if passes else "FAIL")
+        pdf.cell(30, 6, status)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

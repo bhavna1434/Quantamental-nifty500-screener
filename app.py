@@ -502,13 +502,28 @@ with tab1:
                     _f = _fund_lu.get(_tk, {})
                     _t = _tech_lu.get(_tk, {})
 
-                    def _safe(v, default=0):
+                    def _safe(v):
+                        """Return v as a float, or None if missing/NaN/unparseable.
+                        Never silently substitutes 0 — the PDF renders None as N/A."""
+                        if v is None:
+                            return None
                         try:
-                            f = float(v) if v is not None else None
-                            # f != f is True only for NaN (IEEE 754)
-                            return default if f is None or f != f else f
+                            f = float(v)
                         except (TypeError, ValueError):
-                            return default
+                            return None
+                        return None if f != f else f  # f != f is True only for NaN
+
+                    def _safe_str(v):
+                        """dict.get(key, default) only falls back on a missing KEY, not
+                        a NaN VALUE — a real bug when the fundamentals row has the key
+                        but scraping/computation left it NaN. Catch that here."""
+                        if v is None:
+                            return None
+                        if isinstance(v, float) and v != v:
+                            return None
+                        return v
+
+                    _piotroski = _safe(_f.get("piotroski_score"))
 
                     _stock_data = {
                         "ticker":           _tk,
@@ -522,8 +537,8 @@ with tab1:
                         "quality_score":    _safe(_r.get("quality_score")),
                         "momentum_score":   _safe(_r.get("momentum_score")),
                         "surprise_score":   _safe(_r.get("eps_momentum_score")),
-                        "piotroski_score":  int(_safe(_f.get("piotroski_score"))),
-                        "altman_zone":      _f.get("altman_zone", "—"),
+                        "piotroski_score":  None if _piotroski is None else int(_piotroski),
+                        "altman_zone":      _safe_str(_f.get("altman_zone")),
                         "altman_zscore":    _safe(_f.get("altman_zscore")),
                         "current_price":    _safe(_t.get("current_price")),
                         "pe_ratio":         _safe(_f.get("pe_ratio")),
