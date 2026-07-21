@@ -1,13 +1,14 @@
-# Model Limitations, Honest Caveats & India Calibration
-**Read this BEFORE any interview. Listing your model's limitations is more impressive than pretending it has none.**
+# Model Limitations & India Calibration Notes
 
 > "Every model is wrong. Some are useful." — George Box, statistician
 
 ---
 
-## WHY THIS DOCUMENT EXISTS
+## PURPOSE
 
-Any interviewer worth their time will probe the weaknesses in your model. The worst answer is to be caught off guard or to defensively deny limitations. The best answer is to name the limitations before they ask, explain exactly why they exist, and articulate what you would do to fix them with more time/data. This document prepares you to do exactly that.
+This document records the known limitations of the screener, the assumptions built into each stage, and the India-specific calibration choices behind the thresholds used in the model. It exists so that anyone using or reviewing the project understands exactly what the model does and does not account for, where the data has gaps, and which design decisions are deliberate simplifications rather than oversights.
+
+Each limitation below is stated plainly, along with why it exists and how it would be addressed with additional time, data, or budget.
 
 ---
 
@@ -91,7 +92,7 @@ def apply_health_gate(ticker: str, sector: str, financials: dict) -> tuple:
 - Value works better in early economic recovery, underperforms in growth-driven bull markets
 - Quality (low volatility, high ROE) tends to outperform in late-cycle and recession environments
 
-**The honest answer in an interview:** "Equal weighting is our default because it avoids data mining — choosing weights based on backtesting performance tends to overfit the historical period. We provide user-adjustable sliders so practitioners can apply their own views. A more sophisticated approach would use factor momentum (overweight factors that have worked recently) or regime-conditional weights (more quality/low-vol in Risk-Off, more momentum in Risk-On)."
+**Design rationale:** Equal weighting is the default because it avoids data mining — choosing weights based on backtesting performance tends to overfit the historical period. The dashboard provides user-adjustable sliders so different views can be applied. A more sophisticated approach would use factor momentum (overweighting factors that have worked recently) or regime-conditional weights (more quality/low-volatility in Risk-Off, more momentum in Risk-On).
 
 ### 2.3 No Sector-Neutral Ranking
 
@@ -111,9 +112,9 @@ We implement Option B (sector cap) in Stage 4, but Option C (sector-relative z-s
 
 ### 2.4 Momentum and the 1-Month Reversal Effect
 
-**The academic issue:** Jegadeesh & Titman's original momentum factor excludes the most recent month because stocks exhibit strong 1-month reversal (microstructure effects, bid-ask bounce). Our 6-month calculation includes the most recent month. This may reduce the efficacy of the momentum factor slightly.
+**The academic issue:** Jegadeesh & Titman's original momentum factor excludes the most recent month because stocks exhibit strong 1-month reversal (microstructure effects, bid-ask bounce).
 
-**Fix for later:** Change to: `momentum = return from 7 months ago to 1 month ago` (skip the most recent 21 trading days).
+**How the model handles it:** The momentum factor uses the 6-month return skipping the most recent 21 trading days (approximately one month), consistent with the academic convention. This avoids the short-term reversal effect that would otherwise contaminate the signal.
 
 ---
 
@@ -127,7 +128,7 @@ We implement Option B (sector cap) in Stage 4, but Option C (sector-relative z-s
 
 **Size of the bias:** Studies on US markets suggest survivorship bias inflates backtest returns by 1–2% per year. Indian markets, with higher corporate governance risk, might see larger effects.
 
-**Honest acknowledgement:** "Our backtest uses current Nifty 500 constituents, which introduces survivorship bias. We are testing on companies that survived the entire period — not the full universe that existed at each historical point. To fix this properly, we would need IISL (NSE Indices) historical constituent data to apply point-in-time universe construction. This is a known limitation, and our backtest results should be treated as an upper bound on real-world performance."
+**Acknowledgement:** The backtest uses current Nifty 500 constituents, which introduces survivorship bias — it tests on companies that survived the entire period, not the full universe that existed at each historical point. Fixing this properly requires IISL (NSE Indices) historical constituent data to apply point-in-time universe construction. Until then, the backtest results should be treated as an upper bound on real-world performance.
 
 ### 3.2 Market Impact and Liquidity
 
@@ -208,9 +209,9 @@ Indian market P/E ratios are structurally higher than, say, US or European avera
 
 ---
 
-## SECTION 5: WHAT YOU WOULD CHANGE WITH MORE TIME/RESOURCES
+## SECTION 5: PLANNED IMPROVEMENTS WITH MORE TIME/RESOURCES
 
-This is the question interviewers love to ask. Have clear, specific answers:
+The following are the highest-priority extensions that would meaningfully improve the model:
 
 **1. Point-in-time fundamental data (most important)**
 Buy Tijori Finance or Trendlyne Pro subscription. Reconstruct the full model with historical fundamentals to eliminate look-ahead bias in the Piotroski and Altman calculations.
@@ -243,10 +244,11 @@ Instead of equal weighting the top 20 stocks, use mean-variance optimization (Ma
 | Equal factor weights are arbitrary | Medium | Addressed | User sliders; note the limitation |
 | No sector-neutral ranking | Medium | Partial | Sector cap implemented; sector-relative z-scoring not yet |
 | Transaction costs ignored | Medium | Not addressed | Estimate ~0.5–1% p.a. drag; note in methodology |
-| Momentum 1-month reversal | Low | Not addressed | Skip most recent 21 days in momentum calculation |
-| Liquidity filter missing | Medium | Not addressed | Filter for ADV > ₹5 crore |
-| ROCE thresholds not sector-adjusted | Medium | Not addressed | Implement sector-specific thresholds |
+| Momentum 1-month reversal | Low | Addressed | Momentum skips the most recent 21 trading days |
+| Liquidity filter | Medium | Addressed | ADV > ₹5 crore filter live in Stage 2 |
+| ROCE thresholds sector-adjusted | Medium | Addressed | Sector-specific ROCE floors in fundamental_filter.py |
+| Promoter pledge not scraped | Medium | Structural constraint | Pledge data loads via JavaScript AJAX on Screener.in and is not in static HTML; defaults to 0% and rejects only when a pledge > 20% is found. Use BSE SHP filings or Trendlyne for production |
 
 ---
 
-*Disclosing limitations is not a sign of weakness — it is the sign of a rigorous analyst. Every professional investment document has a risk section. Yours should too.*
+*Every quantitative model carries assumptions and data constraints. Documenting them transparently is part of building a system that can be trusted and improved over time.*

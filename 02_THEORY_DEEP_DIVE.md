@@ -1,5 +1,5 @@
-# Theory Deep-Dive: Every Concept Behind the Screener
-**Read this before every interview. Every formula here should feel like your own handwriting.**
+# Theory & Methodology: The Concepts Behind the Screener
+**A complete reference for the financial theory, formulas, and academic literature underpinning each stage of the model.**
 
 ---
 
@@ -33,8 +33,8 @@ The three forms of EMH:
 
 Factor investing evidence says semi-strong form is at best partially true — systematic factors do generate excess returns.
 
-### Fama-French Three-Factor Model (1992)
-Kenneth French and Eugene Fama published "The Cross-Section of Expected Stock Returns" in the Journal of Finance, 1992. This is the foundational paper for modern factor investing.
+### Fama-French Three-Factor Model (1992–1993)
+Eugene Fama and Kenneth French established the empirical case for size and value in "The Cross-Section of Expected Stock Returns" (Journal of Finance, 1992), then formalised the three-factor time-series model in "Common Risk Factors in the Returns on Stocks and Bonds" (Journal of Financial Economics, 1993). Together these are the foundational papers for modern factor investing.
 
 They showed that two factors beyond market beta explain stock returns:
 
@@ -71,8 +71,8 @@ Our five factors map to the academic literature as follows:
 | Value (P/E, EV/EBITDA) | Fama-French HML | Mean reversion — cheap stocks are underpriced |
 | Growth (CAGR) | Proprietary / GARP | Find value that isn't a trap |
 | Quality (ROE, ROCE) | Novy-Marx (2013) — Gross Profitability | Profitable companies sustain earnings |
-| Momentum (6M return) | Jegadeesh & Titman (1993) | Price continuation, investor herding |
-| Earnings Surprise | Ball & Brown (1968), PEAD literature | Market underreacts to earnings news |
+| Momentum (6M return, skip 1M) | Jegadeesh & Titman (1993) | Price continuation, investor herding |
+| EPS Momentum (QoQ EPS change) | Ball & Brown (1968), PEAD literature | Stocks with accelerating quarterly earnings tend to keep outperforming |
 
 **The two competing explanations for why factors work:**
 
@@ -124,9 +124,9 @@ Breadth = (Number of Nifty 500 stocks above their own 200-day MA) / 500 × 100%
 | Nifty 50 > MA200 AND breadth 40–60% | Neutral | Index is up but market is narrow. Could be a top. |
 | Nifty 50 < MA200 OR breadth < 40% | Risk-Off | Broad deterioration. Capital at risk. |
 
-**The real interview answer to "why 200-day MA?"**
+**Summary: why the 200-day MA?**
 
-"The 200-day MA is the most widely used trend-following signal in institutional equity management. Meb Faber's 2007 paper showed it reduces drawdowns by 50%+ across asset classes while preserving most of the upside. We combine it with market breadth — the percentage of Nifty 500 stocks above their own 200-day MA — because a cap-weighted index can stay above its MA on the back of just 5 large stocks while the rest deteriorate. Breadth makes the regime signal more honest. We acknowledge it's a lagging indicator — it will always be late at turning points — which is why we use it only to toggle between fully invested and defensive, not to time entries precisely."
+The 200-day MA is the most widely used trend-following signal in institutional equity management. Meb Faber's 2007 paper showed it reduces drawdowns by more than 50% across asset classes while preserving most of the upside. The model combines it with market breadth — the percentage of Nifty 500 stocks above their own 200-day MA — because a cap-weighted index can stay above its MA on the strength of a handful of large stocks while the broader market deteriorates. Breadth makes the regime signal more robust. The 200-day MA is a lagging indicator and will always be late at turning points, which is why it is used only to toggle between fully invested and defensive positioning, not to time entries precisely.
 
 ### Limitation: It's Lagging
 A 200-day MA will always tell you about the trend that existed over the past 200 days, not the trend that starts today. In a sharp reversal (March 2020 COVID crash), the MA gives a sell signal well after the damage is done. This is a fundamental limitation of all trend-following models.
@@ -404,7 +404,7 @@ A company can grow earnings without growing revenue through cost cuts — but th
 ROE = Net Income / Average Shareholders' Equity
 ```
 
-**DuPont Decomposition (every interview will test this):**
+**DuPont Decomposition:**
 ```
 ROE = (Net Income/Revenue) × (Revenue/Total Assets) × (Total Assets/Equity)
     = Net Profit Margin × Asset Turnover × Financial Leverage
@@ -428,10 +428,10 @@ Narasimhan Jegadeesh and Sheridan Titman, "Returns to Buying Winners and Selling
 They showed: stocks that outperformed over the past 3–12 months continue to outperform over the next 3–12 months. The reverse is also true.
 
 ```
-6-Month Momentum = (P(today) - P(126 trading days ago)) / P(126 trading days ago)
+6-Month Momentum (skip 1 month) = (P(t-21) - P(t-147)) / P(t-147)
 ```
 
-(We use 126 = approximately 6 calendar months of trading days, 21 days/month × 6)
+The return is measured over a six-month window that ends one month ago: from roughly 7 months ago (t-147 trading days) to 1 month ago (t-21 trading days). This is approximately 126 trading days of price change (21 trading days per month × 6), with the most recent month deliberately excluded — see the convention note below.
 
 **Why does momentum work?**
 
@@ -439,14 +439,14 @@ They showed: stocks that outperformed over the past 3–12 months continue to ou
 
 *Institutional herding:* Fund managers who have outperformed attract more inflows → must buy more of what they own → price rises further. Trend-following CTA funds also mechanically buy rising assets.
 
-**The standard momentum convention: 12-1 momentum**
-Academic literature typically uses 12-month return excluding the most recent 1 month (because stocks exhibit 1-month reversal — they tend to reverse in the very short term due to microstructure effects). In practice for India, 6-month momentum is more commonly used by domestic quant funds because:
-1. Indian earnings cycles are quarterly — 6 months captures 2 earnings announcements
-2. Higher turnover in Indian markets means the 12-1 convention is less critical
+**Momentum convention: skip the most recent month**
+Academic literature typically uses the 12-month return excluding the most recent 1 month, because stocks exhibit short-term (1-month) reversal driven by microstructure effects such as bid-ask bounce. This model uses a 6-month lookback that also skips the most recent month (a "6-1" formulation) for two India-specific reasons:
+1. Indian earnings cycles are quarterly — a 6-month window captures two earnings announcements
+2. Skipping the most recent month removes the short-term reversal contamination while keeping the signal responsive to intermediate trends
 
 **The momentum crash risk:** Momentum is the one factor known to "crash" — in sharp market reversals (2009, 2020), last year's winners get sold aggressively, causing violent momentum reversals. This is why having a regime filter (Stage 1) is critical. In Risk-Off markets, momentum factor weight should ideally be reduced.
 
-### Factor 5: EARNINGS SURPRISE (PEAD) — Covered in Section 9
+### Factor 5: EPS MOMENTUM (QoQ EPS Change) — Covered in Section 9
 
 ---
 
@@ -488,13 +488,13 @@ Cross-sectional is correct here because we want to rank stocks against each othe
 ### Composite Score Formula
 
 ```
-Composite_Score = w_value × z_value
-               + w_growth × z_growth
-               + w_quality × z_quality
-               + w_momentum × z_momentum
-               + w_surprise × z_surprise
+Composite_Score = w_value        × z_value
+               + w_growth        × z_growth
+               + w_quality       × z_quality
+               + w_momentum      × z_momentum
+               + w_eps_momentum  × z_eps_momentum
 
-Where all weights sum to 1.0 (e.g., 0.20 each in equal-weight version)
+Where all weights sum to 1.0 (e.g., 0.20 each in the equal-weight version)
 ```
 
 The composite score is itself a z-scored quantity. Higher = better relative to the universe. We rank stocks by this score and take the top N.
@@ -558,7 +558,9 @@ We require this distance to be < 20% (stock within 20% of its yearly high).
 
 ---
 
-## 9. POST-EARNINGS ANNOUNCEMENT DRIFT (PEAD)
+## 9. EPS MOMENTUM & POST-EARNINGS ANNOUNCEMENT DRIFT (PEAD)
+
+**Implementation note:** The screener's fifth factor is **EPS Momentum**, measured as the quarter-on-quarter percentage change in earnings per share. This serves as a practical, data-available proxy for the earnings-drift effect described below. It is *not* true analyst-consensus PEAD, which requires paid estimate data (actual EPS versus consensus forecast). The academic theory in this section explains the underlying anomaly that motivates the factor; the distinction between the EPS-momentum proxy and formal PEAD is disclosed in the project README and methodology note.
 
 ### The Original Discovery
 Ray Ball and Philip Brown, "An Empirical Evaluation of Accounting Income Numbers," *Journal of Accounting Research*, 1968. This is one of the most cited accounting papers ever published.
@@ -722,7 +724,7 @@ Run a regression: `Strategy Return = α + β × Nifty 500 Return + ε`
 
 ---
 
-## APPENDIX: KEY ACADEMIC PAPERS TO CITE IN INTERVIEWS
+## APPENDIX: KEY ACADEMIC PAPERS
 
 | Concept | Paper | Journal | Year |
 |---------|-------|---------|------|
@@ -740,4 +742,4 @@ Run a regression: `Strategy Return = α + β × Nifty 500 Return + ε`
 
 ---
 
-*This document is your intellectual foundation. If you can explain every formula here in plain English — without looking at notes — you can defend this project in any interview.*
+*This document is the intellectual foundation of the project — a plain-English reference for every formula, threshold, and academic result the model relies on.*

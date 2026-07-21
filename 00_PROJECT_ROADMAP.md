@@ -1,5 +1,6 @@
 # Quantamental Nifty 500 Screener — Project Roadmap (v2)
-**Goal:** Build and deploy a 5-stage QVGS-style stock screener on GitHub + Streamlit Cloud 
+**Goal:** Build and deploy a 5-stage quantamental stock screener on GitHub + Streamlit Cloud  
+**Scope:** A Red / Yellow / Green-Flag framework applied to the Nifty 500 universe, combining fundamental screening with quantitative factor ranking and technical timing
 
 ---
 
@@ -10,9 +11,9 @@ Nifty 500 Universe
       ↓
 [Stage 1] Market Regime Detection     → Risk-On / Neutral / Risk-Off
       ↓
-[Stage 2] Red-Flag Filter             → Piotroski F-Score + Altman Z-Score + ROCE/Debt/Pledge
+[Stage 2] Red-Flag Filter             → Piotroski F-Score + Altman Z'' + ROCE/Debt/ICR/Pledge
       ↓
-[Stage 3] Yellow-Flag Factor Rank     → Value + Growth + Quality + Momentum + Earnings Surprise
+[Stage 3] Yellow-Flag Factor Rank     → Value + Growth + Quality + Momentum + EPS Momentum
       ↓
 [Stage 4] Green-Flag Technical Entry  → RSI + Moving Averages + 52-week proximity + Correlation check
       ↓
@@ -26,11 +27,10 @@ Nifty 500 Universe
 ### Stage 2 — Red-Flag Filter (upgraded)
 | Feature | What it does | Difficulty |
 |---------|-------------|-----------|
-| ROCE / Debt / Pledge | Original hard filters | Easy |
-| **Piotroski F-Score** | 9-point financial health score — Piotroski F-Score >= 5 required | Medium |
-| **Altman Z''-Score** | Bankruptcy risk model (1995 emerging markets model), threshold >= 1.10 | Medium |
-| **ICR** | ICR >= 1.5x (Interest Coverage Ratio, computed as EBIT/Interest from P&L) | Medium |
-| **Market Cap / Liquidity** | Market cap >= 500 Cr and liquidity >= Rs 5 Cr/day | Easy |
+| ROCE / Debt / ICR / Pledge | Sector-adjusted hard filters (ROCE floors, D/E ceilings, ICR ≥ 1.5x, pledge check) | Easy |
+| **Piotroski F-Score** | 9-point financial health score — stocks scoring below 5 are rejected | Medium |
+| **Altman Z''-Score** | Bankruptcy risk model (1995 emerging-markets version) — Z'' below 1.10 is the distress zone, rejected | Medium |
+| **Market cap / liquidity** | Market cap ≥ ₹500 Cr and 30-day ADV ≥ ₹5 Cr/day to keep the universe actionable | Easy |
 
 ### Stage 3 — Factor Model (upgraded)
 | Factor | Signal | Weight |
@@ -38,13 +38,13 @@ Nifty 500 Universe
 | Value | P/E + EV/EBITDA z-score | 20% |
 | Growth | Revenue CAGR + EPS CAGR | 20% |
 | Quality | ROE + ROCE | 20% |
-| Momentum | 6-month price return | 20% |
-| **EPS Momentum (QoQ EPS % change)** | EPS actual vs consensus — post-announcement drift | 20% |
+| Momentum | 6-month price return, skipping the most recent month | 20% |
+| **EPS Momentum** | Quarter-on-quarter EPS % change (proxy for post-earnings drift) | 20% |
 
 ### Stage 5 — Dashboard (upgraded)
 | Feature | What it adds |
 |---------|-------------|
-| **Factor weight sliders** | User tunes Value/Growth/Quality/Momentum/Surprise weights live |
+| **Factor weight sliders** | User tunes Value/Growth/Quality/Momentum/EPS-Momentum weights live |
 | **Screener history log** | SQLite tracks weekly top-20; shows new entries and exits |
 | **Correlation heatmap** | Plotly heatmap of top-stock return correlations |
 | **PDF tearsheet** | 1-page downloadable PDF per stock with all metrics |
@@ -104,7 +104,7 @@ Nifty 500 Universe
 | 5 | 1 | Value factor: P/E + EV/EBITDA z-score | `factor_model.py` | 2 |
 | 5 | 2 | Growth factor: Revenue CAGR + EPS CAGR | `factor_model.py` | 1.5 |
 | 5 | 3 | Quality factor: ROE + ROCE. Momentum: 6M return | `factor_model.py` | 2 |
-| 6 | 1 | **Earnings Surprise factor**: scrape EPS actual vs estimate | `earnings_surprise.py` | 2 |
+| 6 | 1 | **EPS Momentum factor**: compute quarter-on-quarter EPS % change | `earnings_surprise.py` | 2 |
 | 6 | 2 | Composite z-score with 5 factors (20% each). Rank top 50 | `factor_model.py` | 1.5 |
 | 6 | 3 | ✅ Checkpoint: ranked table of top 50 stocks with factor scores | — | 1 |
 
@@ -136,7 +136,7 @@ Nifty 500 Universe
 |-----|-----------|-------|
 | 1 | Final `requirements.txt`, test app end-to-end locally | 1 |
 | 2 | Deploy on Streamlit Cloud (3 clicks from GitHub) | 1 |
-| 3 | Write 1-page methodology PDF + cold email to Sanjit at Modulor | 1 |
+| 3 | Write 1-page methodology PDF + finalise project documentation | 1 |
 
 ---
 
@@ -160,7 +160,7 @@ nifty500-screener/
 │   ├── fundamental_filter.py   ← Stage 2: Basic Red-Flag filters
 │   ├── financial_health.py     ← Stage 2+: Piotroski + Altman  ★ NEW
 │   ├── factor_model.py         ← Stage 3: Value/Growth/Quality/Momentum
-│   ├── earnings_surprise.py    ← Stage 3+: PEAD / earnings surprise ★ NEW
+│   ├── earnings_surprise.py    ← Stage 3+: EPS Momentum (QoQ EPS change) ★ NEW
 │   ├── technical_filter.py     ← Stage 4: RSI + MA + 52W
 │   ├── visualizations.py       ← Charts: heatmap + attribution    ★ NEW
 │   ├── history_tracker.py      ← SQLite screener history log      ★ NEW
@@ -176,7 +176,7 @@ nifty500-screener/
 ## Milestones & Checkpoints
 
 - [x] **May 8** — Price data loading for all 500 stocks
-- [x] **May 22** — Stage 2 complete: Piotroski + Altman + basic filters running
+- [x] **May 22** — Stage 2 complete: Piotroski + Altman Z'' + basic filters running
 - [x] **June 5** — Stage 3 complete: 5-factor model ranking top 50
 - [x] **June 12** — Stage 4 complete: technical filter + correlation matrix
 - [x] **June 26** — Full Streamlit app running locally (all features)
@@ -184,14 +184,14 @@ nifty500-screener/
 
 ---
 
-## What Makes This Stand Out to Modulor
+## What Makes This Project Stand Out
 
 1. **Piotroski F-Score** — institutional-grade financial health filter, not just ROCE
-2. **Altman Z-Score** — bankruptcy risk model every finance professional recognizes
-3. **EPS Momentum factor** — directly replicates their sentiment/earnings-surprise strategy
+2. **Altman Z''-Score** — a bankruptcy-risk model recognised across the finance industry, calibrated for emerging markets
+3. **EPS Momentum factor** — captures the post-earnings drift effect using quarter-on-quarter EPS change
 4. **Factor weight sliders** — interactive, demonstrates product thinking
 5. **Screener history** — shows systematic discipline, not a one-time script
-6. **PDF tearsheet** — makes it look like a real investment product
+6. **PDF tearsheet** — presents output in the format of a real investment product
 
 ---
 

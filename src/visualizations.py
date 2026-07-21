@@ -84,7 +84,7 @@ def plot_factor_attribution(ranked_df: pd.DataFrame, top_n: int = 15) -> go.Figu
     Stacked bar chart showing what each factor contributed to each stock's
     composite score.
 
-    This is the single most impressive visualization for Modulor — it shows
+    This is the single most useful visualization in the dashboard — it shows
     exactly WHY each stock ranked highly (e.g. "RELIANCE is high because of
     strong momentum and EPS momentum, not value").
 

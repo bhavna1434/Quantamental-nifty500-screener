@@ -11,7 +11,7 @@
 
 ## What This Is
 
-A quantamental stock screener that combines systematic fundamental analysis — Piotroski F-Score, Altman Z''-Score, and a 5-factor cross-sectional model — with technical timing signals to filter the full Nifty 500 universe down to a ranked shortlist of actionable ideas. The pipeline follows the Red-Flag → Yellow-Flag → Green-Flag methodology used by practitioners such as Modulor Capital: first eliminate structurally weak businesses, then rank survivors by factor quality, then confirm with price-based entry signals. Built as a portfolio project targeting quantitative equity research roles, May–July 2026.
+A quantamental stock screener that combines systematic fundamental analysis — Piotroski F-Score, Altman Z''-Score, and a 5-factor cross-sectional model — with technical timing signals to filter the full Nifty 500 universe down to a ranked shortlist of actionable ideas. The pipeline follows a Red-Flag → Yellow-Flag → Green-Flag methodology common among quantitative equity funds: first eliminate structurally weak businesses, then rank survivors by factor quality, then confirm with price-based entry signals. Built as a portfolio project targeting quantitative equity research roles, May–July 2026.
 
 ---
 
