@@ -6,7 +6,6 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import ta
-from datetime import datetime, timedelta
 from pathlib import Path
 
 st.set_page_config(
@@ -17,9 +16,7 @@ st.set_page_config(
 
 from src.data_loader import load_nifty500_list
 from src.regime_detector import get_current_regime
-from src.fundamental_filter import apply_red_flag_filter, fetch_fundamentals
-from src.factor_model import rank_stocks
-from src.technical_filter import apply_green_flag_filter
+from src.factor_model import recompute_composite
 from src.history_tracker import (
     init_database, save_run, render_history_section, get_stock_history,
     import_history_from_csv, export_history_to_csv,
@@ -33,6 +30,7 @@ from src.visualizations import (
     plot_rank_history,
 )
 from src.backtesting import run_momentum_backtest, plot_backtest_results
+from src.pipeline import run_full_pipeline, load_precomputed_outputs, NIFTY500_LIST_CSV
 
 init_database()
 import_history_from_csv()   # re-seed SQLite from CSV after cloud restarts
@@ -44,12 +42,11 @@ if "ranked_df" in st.session_state:
         del st.session_state["ranked_df"]
         del st.session_state["excluded_df"]
 
-CACHE_PATH   = Path("data/fundamentals_cache.csv")
-CACHE_MAX_AGE_DAYS = 7
 
-
-def load_nifty500_df(filepath: str = "data/nifty500_list.csv") -> pd.DataFrame:
-    """Return the full CSV with Company Name, Industry, Symbol columns."""
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_nifty500_df(filepath: str = str(NIFTY500_LIST_CSV)) -> pd.DataFrame:
+    """Return the full CSV with Company Name, Industry, Symbol columns.
+    Cached for an hour — this is read on every rerun (every slider drag)."""
     path = Path(filepath)
     if not path.exists():
         st.error(
@@ -62,35 +59,18 @@ def load_nifty500_df(filepath: str = "data/nifty500_list.csv") -> pd.DataFrame:
     return pd.read_csv(filepath)
 
 
-def build_sector_map(nifty_df: pd.DataFrame) -> dict:
-    """Build {ticker: industry} dict from the CSV's Symbol and Industry columns."""
-    return dict(zip(nifty_df["Symbol"], nifty_df["Industry"]))
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_precomputed_outputs_cached():
+    """Cached wrapper around the precompute-file load — repeated reruns within
+    a session (e.g. every slider drag) shouldn't re-read/re-parse the CSV."""
+    return load_precomputed_outputs()
 
 
-def load_fundamentals_cache() -> pd.DataFrame | None:
-    """Return cached fundamentals if file exists and is < 7 days old, else None."""
-    if not CACHE_PATH.exists():
-        return None
-    age = datetime.now() - datetime.fromtimestamp(CACHE_PATH.stat().st_mtime)
-    if age > timedelta(days=CACHE_MAX_AGE_DAYS):
-        return None
-    return pd.read_csv(CACHE_PATH)
-
-
-def scrape_and_cache_fundamentals(tickers: list, sector_map: dict,
-                                   progress_bar) -> tuple[list, pd.DataFrame, pd.DataFrame]:
-    """
-    Scrape fundamentals for all tickers, updating a Streamlit progress bar.
-    Saves results to cache after completion.
-    Returns (passing, rejected_df, fundamentals_df).
-    """
-    from src.fundamental_filter import apply_red_flag_filter
-    passing, rejected_df, fundamentals_df = apply_red_flag_filter(
-        tickers, sector_map=sector_map, verbose=False
-    )
-    if not fundamentals_df.empty:
-        fundamentals_df.to_csv(CACHE_PATH, index=False)
-    return passing, rejected_df, fundamentals_df
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_regime():
+    """Live current-market regime for the top metric card. Cached hourly so a
+    slider drag doesn't refetch Nifty 50 data from Yahoo Finance every rerun."""
+    return get_current_regime()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -134,16 +114,14 @@ with st.sidebar:
 
     st.divider()
 
-    run_clicked = st.button("▶ Run Screener", type="primary", use_container_width=True)
-    cache_exists = CACHE_PATH.exists()
-    cache_age    = (
-        datetime.now() - datetime.fromtimestamp(CACHE_PATH.stat().st_mtime)
-        if cache_exists else None
+    st.caption(
+        "By default the app loads the last precomputed run instantly. "
+        "Use this button only when you want fresh live data."
     )
-    if cache_exists and cache_age and cache_age <= timedelta(days=CACHE_MAX_AGE_DAYS):
-        st.caption(f"Cache: {cache_age.days}d {cache_age.seconds//3600}h old — run will be fast ⚡")
-    else:
-        st.caption("First run scrapes all 500 stocks (~15 min). Subsequent runs use cache.")
+    run_clicked = st.button(
+        "▶ Run Full Screener (re-scrapes data, ~10-15 min)",
+        type="primary", use_container_width=True,
+    )
 
     st.divider()
     st.subheader("Methodology")
@@ -162,9 +140,9 @@ with st.sidebar:
         )
 
 
-# ── Regime (computed once per page load, stored so pipeline can use it) ──────
+# ── Regime (live, cached hourly — for the top metric card + gauge only) ──────
 try:
-    _regime_data = get_current_regime()
+    _regime_data = _cached_regime()
     regime = _regime_data["regime"]
     st.session_state["regime_data"] = _regime_data
 except Exception:
@@ -172,109 +150,75 @@ except Exception:
     st.session_state["regime_data"] = {"regime": "Neutral", "nifty_data": {}, "breadth_pct": None}
 st.session_state["regime"] = regime
 
+# nifty500 list is needed for tearsheet company/sector lookups regardless of
+# whether ranked data came from the fast path or a live run — always load it.
+st.session_state["nifty_df"] = _load_nifty500_df()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PIPELINE — runs when button is clicked
+# FAST PATH — load the precomputed run instantly on first view this session
+# ══════════════════════════════════════════════════════════════════════════════
+
+if "ranked_df" not in st.session_state:
+    _pre = _load_precomputed_outputs_cached()
+    if _pre is not None:
+        st.session_state["ranked_df"]       = _pre["ranked_df"]
+        st.session_state["excluded_df"]     = _pre["excluded_df"]
+        st.session_state["fundamentals_df"] = _pre["fundamentals_df"]
+        st.session_state["tech_df"]         = _pre["tech_df"]
+        st.session_state["meta"]            = _pre["meta"]
+        st.session_state["universe_count"]  = _pre["meta"]["universe_count"]
+        st.session_state["passing_count"]   = _pre["meta"]["after_red_flag_count"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LIVE PIPELINE — only runs when "Run Full Screener" is clicked (~10-15 min)
 # ══════════════════════════════════════════════════════════════════════════════
 
 if run_clicked and weights:
-    with st.spinner("Running screener pipeline…"):
+    with st.spinner(
+        "Running the full pipeline — scraping ~500 stocks from Screener.in, "
+        "this takes ~10-15 minutes…"
+    ):
+        try:
+            result = run_full_pipeline(weights=weights, verbose=False)
+        except Exception as e:
+            st.error(f"Pipeline failed: {e}")
+            result = None
 
-        # ── Stage 0: load tickers + sector map ───────────────────────────────
-        nifty_df    = load_nifty500_df()
-        all_tickers = nifty_df["Symbol"].tolist()
-        sector_map  = build_sector_map(nifty_df)
-        st.toast(f"Loaded {len(all_tickers)} tickers from CSV")
+    if result is not None:
+        st.session_state["ranked_df"]       = result["ranked_df"]
+        st.session_state["excluded_df"]     = result["excluded_df"]
+        st.session_state["fundamentals_df"] = result["fundamentals_df"]
+        st.session_state["tech_df"]         = result["tech_df"]
+        st.session_state["nifty_df"]        = result["nifty_df"]
+        st.session_state["price_df"]        = result["price_df"]
+        st.session_state["meta"]            = result["meta"]
+        st.session_state["universe_count"]  = result["meta"]["universe_count"]
+        st.session_state["passing_count"]   = result["meta"]["after_red_flag_count"]
+        # Next fast-load (this session or a fresh one) should see this run.
+        _load_precomputed_outputs_cached.clear()
+        st.success(
+            f"Done in {result['meta']['duration_seconds']:.0f}s! "
+            f"{result['meta']['final_count']} stocks passed all 4 stages."
+        )
 
-        # ── Stage 1: download price data for full universe ────────────────────
-        with st.spinner(f"Downloading 1y price data for {len(all_tickers)} stocks…"):
-            tickers_ns = [t + ".NS" for t in all_tickers]
-            raw = yf.download(
-                tickers_ns, period="1y", progress=False, auto_adjust=True
-            )["Close"]
-            raw.columns = [c.replace(".NS", "") for c in raw.columns]
-            st.session_state["price_df"] = raw
 
-        # ── Stage 2: fundamentals — use cache if fresh, else scrape ──────────
-        cached_df = load_fundamentals_cache()
-        if cached_df is not None:
-            st.toast("Using cached fundamentals ⚡ (< 7 days old)")
-            fundamentals_df = cached_df
-            # Re-apply filter logic using cached data to get passing list
-            passing = fundamentals_df["ticker"].tolist() if not fundamentals_df.empty else []
-            rejected_df = pd.DataFrame()
-        else:
-            with st.spinner(
-                f"Stage 2: Scraping fundamentals for {len(all_tickers)} stocks from "
-                f"Screener.in… (first run — this takes ~15 min)"
-            ):
-                passing, rejected_df, fundamentals_df = scrape_and_cache_fundamentals(
-                    all_tickers, sector_map, progress_bar=None
-                )
-            st.toast(f"Scraped {len(all_tickers)} stocks — cache saved to data/fundamentals_cache.csv")
+# ══════════════════════════════════════════════════════════════════════════════
+# INSTANT RE-RANK — reapply current slider weights every rerun, no data fetch
+# ══════════════════════════════════════════════════════════════════════════════
 
-        # ── Stage 2b: EPS momentum scores (QoQ EPS change, z-scored) ─────────────
-        surprise_scores = None
-        if passing:
-            from src.earnings_surprise import compute_surprise_factor_for_universe
-            with st.spinner(f"Stage 2b: Fetching EPS momentum for {len(passing)} stocks…"):
-                surprise_scores = compute_surprise_factor_for_universe(passing)
-            st.toast(f"EPS momentum computed for {(surprise_scores != 0).sum()} stocks")
+if weights and "ranked_df" in st.session_state and not st.session_state["ranked_df"].empty:
+    st.session_state["ranked_df"] = recompute_composite(st.session_state["ranked_df"], weights)
 
-        # ── Stage 3: factor model ranking ─────────────────────────────────────
-        if passing:
-            with st.spinner(f"Stage 3: Ranking {len(passing)} stocks by factor model…"):
-                ranked_df, excluded_df = rank_stocks(
-                    universe=passing,
-                    price_df=raw,
-                    fundamentals_df=fundamentals_df,
-                    surprise_scores=surprise_scores,
-                    weights=weights,
-                )
-            if not excluded_df.empty:
-                st.toast(f"{len(excluded_df)} stocks excluded — insufficient factor data")
-            top_n_tickers = ranked_df["ticker"].head(int(top_n)).tolist()
-        else:
-            ranked_df    = pd.DataFrame()
-            excluded_df  = pd.DataFrame()
-            top_n_tickers = []
-
-        # ── Stage 4: technical green-flag filter ──────────────────────────────
-        if top_n_tickers:
-            with st.spinner("Stage 4: Applying technical green-flag filter…"):
-                tech_df = apply_green_flag_filter(top_n_tickers, raw)
-            final_picks = tech_df[tech_df["passes"]]["ticker"].tolist()
-        else:
-            tech_df     = pd.DataFrame()
-            final_picks = []
-
-        # Merge technical signals into ranked_df for display
-        if not ranked_df.empty and not tech_df.empty:
-            ranked_df = ranked_df.merge(
-                tech_df[["ticker", "rsi", "above_ma50", "pct_from_52w_high", "passes"]],
-                on="ticker", how="left"
-            )
-
-        # Persist in session state
-        st.session_state["ranked_df"]       = ranked_df
-        st.session_state["excluded_df"]     = excluded_df
-        st.session_state["tech_df"]         = tech_df
-        st.session_state["final_picks"]     = final_picks
-        st.session_state["passing_count"]   = len(passing)
-        st.session_state["universe_count"]  = len(all_tickers)
-        st.session_state["fundamentals_df"] = fundamentals_df
-        st.session_state["nifty_df"]        = nifty_df
-
-        # Save run to history database, then flush to CSV for git persistence
-        if not ranked_df.empty:
-            save_run(
-                ranked_df=ranked_df,
-                regime=st.session_state.get("regime", "Neutral"),
-                n_universe=len(all_tickers),
-            )
-            export_history_to_csv()
-
-    st.success(f"Done! {len(final_picks)} stocks passed all 4 stages.")
+_ranked_for_picks = st.session_state.get("ranked_df", pd.DataFrame())
+if not _ranked_for_picks.empty and "passes" in _ranked_for_picks.columns:
+    st.session_state["final_picks"] = (
+        _ranked_for_picks[_ranked_for_picks["passes"] == True]["ticker"]
+        .head(int(top_n)).tolist()
+    )
+else:
+    st.session_state["final_picks"] = []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -339,11 +283,20 @@ with tab1:
     st.subheader("Top Ranked Stocks")
     st.caption("Only stocks that passed all 4 stages are shown (RSI < 70, above MA50, within 20% of 52w high).")
 
+    _meta = st.session_state.get("meta")
+    if _meta:
+        st.caption(
+            f"📅 Last updated: {_meta['timestamp']} · "
+            f"Regime at run: {_meta['regime']} · "
+            f"Weights and ranking below update instantly as you move the sliders — "
+            f"prices and fundamentals are as of this run."
+        )
+
     ranked_df   = st.session_state.get("ranked_df", None)
     excluded_df = st.session_state.get("excluded_df", pd.DataFrame())
 
     if ranked_df is None or ranked_df.empty:
-        st.info("Click **▶ Run Screener** in the sidebar to load real data.")
+        st.info("Click **▶ Run Full Screener** in the sidebar to load real data.")
     else:
         # Forward-compat: rename old column if loaded from a pre-rename cache
         if "surprise_score" in ranked_df.columns:
@@ -480,10 +433,15 @@ with tab1:
     _fdf      = st.session_state.get("fundamentals_df", pd.DataFrame())
     _tdf      = st.session_state.get("tech_df", pd.DataFrame())
     _ndf      = st.session_state.get("nifty_df", pd.DataFrame())
-    _regime   = st.session_state.get("regime", "Neutral")
+    # Use the regime AT THE TIME this ranking snapshot was taken, not the live
+    # top-of-page regime — the tearsheet's prices/scores are frozen to this run,
+    # so its regime label should match (same principle as the tearsheet fix:
+    # every field on it should describe one consistent point in time).
+    _regime   = st.session_state.get("meta", {}).get("regime") \
+                or st.session_state.get("regime", "Neutral")
 
     if not _final:
-        st.info("Run the screener to generate tearsheets.")
+        st.info("Click **▶ Run Full Screener** in the sidebar to generate tearsheets.")
     else:
         # Build per-ticker lookup dicts once
         _ranked_lu = _rdf.set_index("ticker").to_dict("index") if not _rdf.empty else {}
@@ -572,7 +530,7 @@ with tab2:
             use_container_width=True,
         )
     else:
-        st.info("Run the screener to see factor attribution.")
+        st.info("Click **▶ Run Full Screener** in the sidebar to see factor attribution.")
 
     st.divider()
     st.subheader("Return Correlation Matrix")
@@ -582,8 +540,13 @@ with tab2:
             plot_correlation_heatmap(st.session_state["price_df"], _top15),
             use_container_width=True,
         )
+    elif "ranked_df" in st.session_state:
+        st.info(
+            "Full price history isn't part of the fast-loaded precomputed data. "
+            "Click **▶ Run Full Screener** to compute the correlation matrix."
+        )
     else:
-        st.info("Run the screener to see correlation matrix.")
+        st.info("Click **▶ Run Full Screener** in the sidebar to see correlation matrix.")
 
 
 # ── TAB 3: History & Changes ──────────────────────────────────────────────────
@@ -593,10 +556,18 @@ with tab3:
     if "ranked_df" in st.session_state:
         render_history_section(st.session_state["ranked_df"])
     else:
-        st.info("Run the screener first to see history.")
+        st.info("Click **▶ Run Full Screener** in the sidebar first to see history.")
 
 
 # ── TAB 4: Stock Deep-Dive ────────────────────────────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_ticker_history(ticker: str, period: str = "1y") -> pd.DataFrame:
+    """Cached per-ticker price fetch — without this, Streamlit's rerun-on-any-
+    interaction model would refetch from Yahoo Finance on every slider drag
+    even when the user hasn't touched this tab."""
+    return yf.Ticker(ticker + ".NS").history(period=period)
+
+
 with tab4:
     st.subheader("Single Stock Analysis")
     search_ticker = st.text_input("Enter NSE ticker (e.g. RELIANCE, TCS, INFY)", value="RELIANCE")
@@ -604,7 +575,7 @@ with tab4:
         _tick = search_ticker.upper()
         st.caption(f"Showing data for: **{_tick}**")
 
-        _hist_raw = yf.Ticker(_tick + ".NS").history(period="1y")
+        _hist_raw = _cached_ticker_history(_tick, period="1y")
 
         if _hist_raw.empty:
             st.warning(f"No price data found for {_tick}. Check the ticker symbol.")

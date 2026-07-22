@@ -353,6 +353,45 @@ def rank_stocks(
     return ranked, excluded_df
 
 
+def recompute_composite(ranked_df: pd.DataFrame, weights: dict = None) -> pd.DataFrame:
+    """
+    Re-derive composite_score and rank from already-computed factor z-scores —
+    a pure in-memory operation, no data refetch. This is what lets the sidebar
+    weight sliders re-rank instantly: the five *_score columns never change,
+    only how they're combined and sorted.
+
+    Args:
+        ranked_df: DataFrame with value_score, growth_score, quality_score,
+                   momentum_score, eps_momentum_score columns already present.
+        weights:   Optional dict overriding DEFAULT_WEIGHTS. Must contain:
+                   value, growth, quality, momentum, eps_momentum.
+
+    Returns:
+        A copy of ranked_df with composite_score and rank recomputed, sorted
+        descending by composite_score (rank=1 is best).
+    """
+    if ranked_df is None or ranked_df.empty:
+        return ranked_df
+
+    w = weights if weights else DEFAULT_WEIGHTS
+    total_w = sum(w.values())
+    if total_w and abs(total_w - 1.0) > 0.01:
+        w = {k: v / total_w for k, v in w.items()}
+
+    df = ranked_df.copy()
+    df["composite_score"] = (
+        w["value"]        * df["value_score"] +
+        w["growth"]       * df["growth_score"] +
+        w["quality"]      * df["quality_score"] +
+        w["momentum"]     * df["momentum_score"] +
+        w["eps_momentum"] * df["eps_momentum_score"]
+    ).round(4)
+
+    df = df.sort_values("composite_score", ascending=False).reset_index(drop=True)
+    df["rank"] = range(1, len(df) + 1)
+    return df
+
+
 # ── Quick test ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import yfinance as yf
