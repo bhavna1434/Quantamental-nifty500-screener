@@ -11,6 +11,8 @@
   <img src="docs/screenshot.png" alt="Quantamental Nifty 500 Screener dashboard" width="820">
 </p>
 
+> Note: the live app runs on Streamlit's free tier and may take ~30 seconds to wake if it has been idle.
+
 ---
 
 ## What This Is

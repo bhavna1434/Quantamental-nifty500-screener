@@ -68,8 +68,9 @@ def plot_correlation_heatmap(price_df: pd.DataFrame, tickers: list, period_days:
         yaxis=dict(tickfont=dict(size=10)),
         height=500,
         margin=dict(l=100, r=80, t=60, b=100),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"),
     )
 
     return fig
@@ -120,13 +121,15 @@ def plot_factor_attribution(ranked_df: pd.DataFrame, top_n: int = 15) -> go.Figu
     fig.update_layout(
         barmode="relative",          # stacked with negatives going down
         title=dict(text="Factor Attribution — What Drives Each Stock's Rank", font=dict(size=14)),
-        xaxis=dict(title="Stock", tickangle=-45, tickfont=dict(size=10)),
-        yaxis=dict(title="Z-Score Contribution", zeroline=True, zerolinecolor="#ccc"),
+        xaxis=dict(title="Stock", tickangle=-45, tickfont=dict(size=10), gridcolor="rgba(255,255,255,0.08)"),
+        yaxis=dict(title="Z-Score Contribution", zeroline=True, zerolinecolor="rgba(255,255,255,0.25)",
+                   gridcolor="rgba(255,255,255,0.08)"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=420,
         margin=dict(l=60, r=20, t=80, b=100),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"),
     )
 
     return fig
@@ -160,27 +163,34 @@ def plot_regime_gauge(regime: str, nifty_pct_from_ma: float) -> go.Figure:
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=gauge_value,
-        number={"suffix": "%", "font": {"size": 24}},
-        title={"text": f"Market Regime: <b>{regime}</b>", "font": {"size": 14}},
+        number={"suffix": "%", "font": {"size": 24, "color": "#E2E8F0"}},
+        title={"text": f"Market Regime: <b>{regime}</b>", "font": {"size": 14, "color": "#E2E8F0"}},
         delta={"reference": 0, "valueformat": ".1f"},
         gauge={
-            "axis": {"range": [-15, 15], "ticksuffix": "%"},
+            "axis": {"range": [-15, 15], "ticksuffix": "%", "tickcolor": "#94A3B8",
+                     "tickfont": {"color": "#94A3B8"}},
             "bar": {"color": color, "thickness": 0.3},
-            "bgcolor": "white",
+            "bgcolor": "#1E293B",
+            "bordercolor": "rgba(255,255,255,0.08)",
             "steps": [
-                {"range": [-15, -5], "color": "#FAECE7"},   # red zone
-                {"range": [-5, 5],   "color": "#FAEEDA"},   # amber zone
-                {"range": [5, 15],   "color": "#E1F5EE"},   # green zone
+                {"range": [-15, -5], "color": "rgba(216,90,48,0.25)"},   # red zone
+                {"range": [-5, 5],   "color": "rgba(186,117,23,0.25)"}, # amber zone
+                {"range": [5, 15],   "color": "rgba(29,158,117,0.25)"}, # green zone
             ],
             "threshold": {
-                "line": {"color": "#333", "width": 2},
+                "line": {"color": "#E2E8F0", "width": 2},
                 "thickness": 0.75,
                 "value": gauge_value,
             },
         }
     ))
 
-    fig.update_layout(height=250, margin=dict(l=30, r=30, t=50, b=20))
+    fig.update_layout(
+        height=250,
+        margin=dict(l=30, r=30, t=50, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"),
+    )
     return fig
 
 
@@ -203,7 +213,9 @@ def plot_rank_history(ticker: str, history_df: pd.DataFrame) -> go.Figure:
     """
     if history_df.empty:
         fig = go.Figure()
-        fig.add_annotation(text=f"{ticker} not found in history", showarrow=False)
+        fig.add_annotation(text=f"{ticker} not found in history", showarrow=False,
+                            font=dict(color="#E2E8F0"))
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         return fig
 
     fig = go.Figure()
@@ -219,16 +231,18 @@ def plot_rank_history(ticker: str, history_df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         title=dict(text=f"{ticker} — Rank History", font=dict(size=14)),
-        xaxis=dict(title="Date"),
+        xaxis=dict(title="Date", gridcolor="rgba(255,255,255,0.08)"),
         yaxis=dict(
             title="Rank",
             autorange="reversed",   # Rank #1 at TOP of chart
             tickformat="d",
+            gridcolor="rgba(255,255,255,0.08)",
         ),
         height=300,
         margin=dict(l=60, r=20, t=50, b=60),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"),
     )
 
     return fig
@@ -274,12 +288,17 @@ def plot_factor_radar(ticker: str, scores: dict) -> go.Figure:
 
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[-2, 2]),
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(visible=True, range=[-2, 2], gridcolor="rgba(255,255,255,0.15)",
+                             linecolor="rgba(255,255,255,0.15)"),
+            angularaxis=dict(gridcolor="rgba(255,255,255,0.15)", linecolor="rgba(255,255,255,0.15)"),
         ),
         title=dict(text=f"{ticker} — Factor Profile", font=dict(size=14)),
         height=350,
         margin=dict(l=60, r=60, t=60, b=40),
         showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"),
     )
 
     return fig

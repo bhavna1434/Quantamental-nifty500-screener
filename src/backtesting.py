@@ -373,10 +373,12 @@ def plot_backtest_results(results: dict) -> "plotly.graph_objects.Figure":
         height=550,
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E2E8F0"),
     )
-    fig.update_yaxes(gridcolor="#f0f0f0")
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
 
     return fig
 

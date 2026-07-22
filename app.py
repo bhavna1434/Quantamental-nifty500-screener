@@ -2,6 +2,7 @@
 # Main Streamlit application
 # Run with: streamlit run app.py
 
+import os
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -12,6 +13,117 @@ st.set_page_config(
     page_title="Nifty 500 Screener",
     page_icon="📈",
     layout="wide"
+)
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Hide default Streamlit chrome */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden;}
+
+    /* Metric cards */
+    [data-testid="stMetric"] {
+        background-color: #1E293B;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.8rem;
+        color: #94A3B8;
+    }
+
+    /* Section headers */
+    h2, h3 {
+        font-weight: 600 !important;
+        margin-top: 1.75rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Ranked dataframe */
+    [data-testid="stDataFrame"] {
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    [data-testid="stDataFrame"] [role="row"] {
+        min-height: 38px;
+    }
+
+    /* Buttons */
+    .stButton > button, .stDownloadButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+    }
+
+    /* Sliders */
+    [data-testid="stSlider"] [role="slider"] {
+        border-radius: 50%;
+    }
+
+    /* Custom header block */
+    .app-header-title {
+        font-size: 1.9rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .app-header-subtitle {
+        font-size: 0.9rem;
+        color: #94A3B8;
+        margin-top: 2px;
+    }
+    .app-header-updated {
+        text-align: right;
+        font-size: 0.8rem;
+        color: #94A3B8;
+        padding-top: 8px;
+    }
+    .app-header-updated strong {
+        color: #E2E8F0;
+        font-size: 0.85rem;
+    }
+
+    /* KPI card — used for the custom regime badge so it matches st.metric cards */
+    .kpi-card {
+        background-color: #1E293B;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .kpi-label {
+        font-size: 0.8rem;
+        color: #94A3B8;
+        margin-bottom: 6px;
+    }
+    .kpi-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #E2E8F0;
+    }
+    .regime-pill {
+        display: inline-block;
+        padding: 4px 14px;
+        border-radius: 999px;
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    .pill-green { background: rgba(34,197,94,0.15); color: #22C55E; }
+    .pill-amber { background: rgba(245,158,11,0.15); color: #F59E0B; }
+    .pill-red   { background: rgba(239,68,68,0.15); color: #EF4444; }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 from src.data_loader import load_nifty500_list
@@ -114,21 +226,30 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption(
-        "By default the app loads the last precomputed run instantly. "
-        "Use this button only when you want fresh live data."
-    )
-    run_clicked = st.button(
-        "▶ Run Full Screener (re-scrapes data, ~10-15 min)",
-        type="primary", use_container_width=True,
-    )
+    # Live scraping only makes sense where it can run to completion (10-15 min) —
+    # on Streamlit Cloud that would hang the request, so it's local-only, gated
+    # behind an explicit opt-in env var rather than exposed on the deployed app.
+    if os.getenv("ENABLE_LIVE_SCRAPE") == "1":
+        st.caption(
+            "By default the app loads the last precomputed run instantly. "
+            "Use this button only when you want fresh live data."
+        )
+        run_clicked = st.button(
+            "▶ Run Full Screener (re-scrapes data, ~10-15 min)",
+            type="primary", use_container_width=True,
+        )
+    else:
+        run_clicked = False
+        st.caption(
+            "Data is precomputed and refreshed periodically. "
+            "Rankings below reflect the last full run."
+        )
 
     st.divider()
     st.subheader("Methodology")
     from src.methodology_pdf import generate_methodology_pdf
-    import os as _os
     _pdf_path = "data/Nifty500_Methodology.pdf"
-    if not _os.path.exists(_pdf_path):
+    if not os.path.exists(_pdf_path):
         generate_methodology_pdf(_pdf_path)
     with open(_pdf_path, "rb") as _f:
         st.download_button(
@@ -225,16 +346,39 @@ else:
 # MAIN CONTENT
 # ══════════════════════════════════════════════════════════════════════════════
 
-st.title("📈 Quantamental Nifty 500 Screener")
-st.caption("QVGS-style pipeline: Red-Flag filters → 5-Factor ranking → Technical timing")
+# ── Header ────────────────────────────────────────────────────────────────────
+_header_col, _updated_col = st.columns([3, 1])
+with _header_col:
+    st.markdown(
+        """
+        <div class="app-header-title">📈 Quantamental Nifty 500 Screener</div>
+        <div class="app-header-subtitle">QVGS-style pipeline: Red-Flag filters → 5-Factor ranking → Technical timing</div>
+        """,
+        unsafe_allow_html=True,
+    )
+with _updated_col:
+    _header_meta = st.session_state.get("meta", {})
+    _header_ts = _header_meta.get("timestamp", "—")
+    st.markdown(
+        f'<div class="app-header-updated">Last updated<br><strong>{_header_ts}</strong></div>',
+        unsafe_allow_html=True,
+    )
 
 # ── Metric cards ──────────────────────────────────────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     regime = st.session_state.get("regime", "Neutral")
-    regime_emoji = {"Risk-On": "🟢", "Neutral": "🟡", "Risk-Off": "🔴"}.get(regime, "🟡")
-    st.metric("Market Regime", f"{regime_emoji} {regime}")
+    _pill_class = {"Risk-On": "pill-green", "Neutral": "pill-amber", "Risk-Off": "pill-red"}.get(regime, "pill-amber")
+    st.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-label">Market Regime</div>
+            <div class="kpi-value"><span class="regime-pill {_pill_class}">{regime}</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 with col2:
     universe_count = st.session_state.get("universe_count", 500)
@@ -412,10 +556,11 @@ with tab1:
             height=320,
             showlegend=False,
             coloraxis_showscale=False,
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#E2E8F0"),
             margin=dict(t=20, b=60, l=0, r=0),
-            yaxis=dict(title="Stocks", gridcolor="#f0f0f0", dtick=1),
+            yaxis=dict(title="Stocks", gridcolor="rgba(255,255,255,0.08)", dtick=1),
             xaxis=dict(tickangle=-30),
         )
         st.plotly_chart(_sc_fig, use_container_width=True)
@@ -612,13 +757,14 @@ with tab4:
                 _fig.update_layout(
                     title=dict(text=f"{_tick} — Price + Moving Averages", font=dict(size=13)),
                     height=360,
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#E2E8F0"),
                     legend=dict(orientation="h", yanchor="bottom", y=1.01,
                                 xanchor="left", x=0),
                     margin=dict(t=50, b=30, l=10, r=10),
-                    xaxis=dict(gridcolor="#f0f0f0", showgrid=True),
-                    yaxis=dict(gridcolor="#f0f0f0", tickprefix="Rs."),
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.08)", showgrid=True),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.08)", tickprefix="Rs."),
                 )
                 st.plotly_chart(_fig, use_container_width=True)
 
